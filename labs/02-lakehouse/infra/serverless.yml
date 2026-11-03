@@ -15,6 +15,8 @@ provider:
   stage: ${opt:stage, 'dev'}
 
 custom:
+  # AWS Academy Learner Lab no permite crear roles de IAM: los jobs usan el LabRole existente
+  roleArn: arn:aws:iam::${aws:accountId}:role/LabRole
   bucketName: paytrack-lakehouse-${env:STUDENT_ID}-${aws:accountId}
   glueJobArgs:
     "--BASE": s3://${self:custom.bucketName}
@@ -72,7 +74,7 @@ resources:
                 - StorageClass: GLACIER_IR
                   TransitionInDays: 90
 
-    # ── Glue: catálogo y permisos ────────────────────────────
+    # ── Glue: catálogo ───────────────────────────────────────
     GlueDatabase:
       Type: AWS::Glue::Database
       Properties:
@@ -81,43 +83,12 @@ resources:
           Name: paytrack_lakehouse
           Description: Tablas Delta del lakehouse de PayTrack
 
-    GlueRole:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service: glue.amazonaws.com
-              Action: sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
-        Policies:
-          - PolicyName: lakehouse-access
-            PolicyDocument:
-              Version: "2012-10-17"
-              Statement:
-                - Effect: Allow
-                  Action: [s3:GetObject, s3:PutObject, s3:DeleteObject, s3:ListBucket]
-                  Resource:
-                    - arn:aws:s3:::${self:custom.bucketName}
-                    - arn:aws:s3:::${self:custom.bucketName}/*
-                - Effect: Allow
-                  Action:
-                    - kinesis:DescribeStream
-                    - kinesis:DescribeStreamSummary
-                    - kinesis:GetRecords
-                    - kinesis:GetShardIterator
-                    - kinesis:ListShards
-                  Resource: !GetAtt TransactionStream.Arn
-
     # ── Glue: un job por capa ────────────────────────────────
     BronzeJob:
       Type: AWS::Glue::Job
       Properties:
         Name: paytrack-bronze
-        Role: !GetAtt GlueRole.Arn
+        Role: ${self:custom.roleArn}
         GlueVersion: "5.0"
         WorkerType: G.1X
         NumberOfWorkers: 2
@@ -132,7 +103,7 @@ resources:
       Type: AWS::Glue::Job
       Properties:
         Name: paytrack-silver
-        Role: !GetAtt GlueRole.Arn
+        Role: ${self:custom.roleArn}
         GlueVersion: "5.0"
         WorkerType: G.1X
         NumberOfWorkers: 2
@@ -147,7 +118,7 @@ resources:
       Type: AWS::Glue::Job
       Properties:
         Name: paytrack-gold
-        Role: !GetAtt GlueRole.Arn
+        Role: ${self:custom.roleArn}
         GlueVersion: "5.0"
         WorkerType: G.1X
         NumberOfWorkers: 2
@@ -162,7 +133,7 @@ resources:
       Type: AWS::Glue::Job
       Properties:
         Name: paytrack-audit
-        Role: !GetAtt GlueRole.Arn
+        Role: ${self:custom.roleArn}
         GlueVersion: "5.0"
         WorkerType: G.1X
         NumberOfWorkers: 2
@@ -188,7 +159,7 @@ resources:
       Type: AWS::Glue::Job
       Properties:
         Name: paytrack-stream
-        Role: !GetAtt GlueRole.Arn
+        Role: ${self:custom.roleArn}
         GlueVersion: "5.0"
         WorkerType: G.1X
         NumberOfWorkers: 2
