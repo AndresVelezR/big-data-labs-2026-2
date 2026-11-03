@@ -58,15 +58,19 @@ resources:
               Status: Enabled
               Prefix: athena-results/
               ExpirationInDays: 7
-            # TODO: define la política de ciclo de vida de la zona raw/.
-            #   ¿Cuánto tiempo se re-procesa un lote? ¿Cuándo pasarlo a una clase más
-            #   barata (STANDARD_IA, GLACIER_IR)? ¿Se debe borrar alguna vez? (auditoría)
-            #   Usa Transitions (TransitionInDays + StorageClass) y/o ExpirationInDays.
-            #
-            # Pregunta para el informe: ¿por qué NO debes poner una regla de expiración
-            # sobre lakehouse/ (las tablas Delta)? ¿Qué usarías en su lugar?
-            # Referencia:
-            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-rule.html
+            # raw/ es la fuente de verdad para re-procesar y auditar un lote: se enfría con el
+            # tiempo (se re-procesa casi siempre en los primeros días) pero nunca se borra.
+            # No hay regla de expiración sobre lakehouse/: borraría archivos de datos que el
+            # _delta_log todavía referencia y corrompería las tablas Delta (para limpiar versiones
+            # viejas se usa VACUUM, que sí respeta el log).
+            - Id: cool-down-raw
+              Status: Enabled
+              Prefix: raw/
+              Transitions:
+                - StorageClass: STANDARD_IA
+                  TransitionInDays: 30
+                - StorageClass: GLACIER_IR
+                  TransitionInDays: 90
 
     # ── Glue: catálogo y permisos ────────────────────────────
     GlueDatabase:
